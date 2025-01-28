@@ -61,21 +61,23 @@
         }
 
         #svgContainer {
-            width: 100vw; /* Во всю ширину экрана */
-            height: 100vh;
-            max-height: 100vw; /* Ограничение по высоте экрана */
-            border: 1px solid #ccc;
-            overflow: auto;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-top: 20px;
+             width: 100vw;
+        height: 100vh;
+        border: 1px solid #ccc;
+        overflow: hidden; /* Обрезаем SVG, если оно выходит за пределы контейнера */
+        position: relative;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: grab; /* Устанавливаем курсор захвата для контейнера */
         }
 
         #svgCanvas {
             display: block;
-            width: 100%;
-            height: 100%;
+        width: 100%;
+        height: 100vh;
+        cursor: move; /* Устанавливаем курсор для SVG, когда оно перетаскивается */
+        transition: transform 0.2s ease; /* Плавное изменение трансформации */
         }
 
         #downloadLink {
@@ -93,6 +95,79 @@
             background-color: #45a049;
         }
 
+        .toolbar {
+            margin: 10px 0;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .toolbar button {
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+
+        .toolbar button:hover {
+            background-color: #0056b3;
+        }
+
+        .layer-controls {
+            margin-top: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .layer-controls label {
+            margin-bottom: 5px;
+        }
+
+        .tooltip {
+            position: absolute;
+            background-color: #333;
+            color: #fff;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: none;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .popup {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            display: none;
+            z-index: 100;
+            width: 300px;
+            text-align: center;
+        }
+
+        .popup button {
+            margin-top: 10px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+
+        .popup button:hover {
+            background-color: #0056b3;
+        }
+
         /* Для мобильных устройств */
         @media (max-width: 768px) {
             .input-container {
@@ -108,78 +183,11 @@
                 width: 100%;
             }
         }
-
-        /* Стиль кастомного поп-апа */
-        .popup-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-        }
-
-        .popup-content {
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            text-align: center;
-            width: 400px;
-            max-width: 90%;
-            animation: fadeIn 0.3s ease-in-out;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
-        }
-
-        .popup-content h2 {
-            color: #e74c3c;
-            margin-bottom: 10px;
-        }
-
-        .popup-content p {
-            margin-bottom: 15px;
-        }
-
-        .popup-content img {
-            width: 80px;
-            margin-bottom: 10px;
-        }
-
-        .popup-content ul {
-            text-align: left;
-            margin-top: 10px;
-        }
-
-        .popup-content ul li {
-            color: #e74c3c;
-            margin-bottom: 5px;
-        }
-
-        .close-btn {
-            padding: 10px 15px;
-            background-color: #e74c3c;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-
-        .close-btn:hover {
-            background-color: #c0392b;
-        }
-
-        @keyframes fadeIn {
-            0% { opacity: 0; }
-            100% { opacity: 1; }
-        }
     </style>
 </head>
 <body>
     <h1>Min JSON to SVG Parser</h1>
-    
+
     <div class="input-container">
         <div class="input-field">
             <label for="placesJson">Места JSON (текстом)</label>
@@ -193,135 +201,226 @@
 
     <!-- Кнопка загрузки расположена здесь, между полями ввода и результатом -->
     <a id="downloadLink" style="display:none" href="#" download="combined_seating_chart.svg">Скачать SVG</a>
-    <br><br>
-    <p>Подложка перекрывает места, это нормально. Я не знаю как это фиксить.</p>
+
+    <div class="toolbar">
+        <button id="zoomIn">Увеличить</button>
+        <button id="zoomOut">Уменьшить</button>
+        <button id="resetZoom">Сбросить</button>
+    </div>
+
+    <div class="layer-controls">
+        <label>
+            <input type="checkbox" id="toggleLayer" checked /> Показать/Скрыть подложку
+        </label>
+    </div>
 
     <div id="svgContainer">
         <svg id="svgCanvas"></svg>
-    </div>
-
-    <!-- Кастомный Pop-up -->
-    <div id="popupOverlay" class="popup-overlay">
-        <div class="popup-content">
-            <img src="https://img.icons8.com/ios/452/skull.png" alt="Skull Icon" />
-            <h2>Ахтунг! Тут спецсимволы!</h2>
-            <p>Найдены секторы с недопустимыми символами, не забудь исправить:</p>
-            <ul id="popupList"></ul>
-            <button class="close-btn" onclick="closePopup()">Закрыть</button>
+        <div class="tooltip" id="tooltip"></div>
+        <div class="popup" id="popup">
+            <p id="popupText"></p>
+            <button id="popupClose">Закрыть</button>
+            <button id="popupDelete">Удалить</button> <!-- Добавлена кнопка для подтверждения удаления -->
         </div>
     </div>
 
-    <script>
-        let finalSvg = '';  // Эта переменная будет хранить итоговое содержимое SVG
-        let invalidNames = []; // Массив для хранения названий с спецсимволами
+   <script>
+    let finalSvg = ''; // Эта переменная будет хранить итоговое содержимое SVG
+    let invalidNames = []; // Массив для хранения названий с спецсимволами
+    let scale = 1; // Масштаб для SVG
 
-        // Обработчик для ввода JSON с мест
-        document.getElementById('placesJson').addEventListener('input', combineSVG);
+    const svgCanvas = document.getElementById('svgCanvas');
+    const svgContainer = document.getElementById('svgContainer');
+    const tooltip = document.getElementById('tooltip');
+    const popup = document.getElementById('popup');
+    const popupText = document.getElementById('popupText');
+    const popupClose = document.getElementById('popupClose');
+    const toggleLayerCheckbox = document.getElementById('toggleLayer');
+    const zoomInButton = document.getElementById('zoomIn');
+    const zoomOutButton = document.getElementById('zoomOut');
+    const resetZoomButton = document.getElementById('resetZoom');
+    const downloadLink = document.getElementById('downloadLink');
 
-        // Обработчик для ввода JSON с SVG
-        document.getElementById('customJson').addEventListener('input', combineSVG);
+    document.getElementById('placesJson').addEventListener('input', combineSVG);
+    document.getElementById('customJson').addEventListener('input', combineSVG);
 
-        function combineSVG() {
-            const svgCanvas = document.getElementById('svgCanvas');
-            const placesJson = document.getElementById('placesJson').value.trim();
-            const customJson = document.getElementById('customJson').value.trim();
+    // Обработчик парсинга JSON
+    function combineSVG() {
+        const placesJson = document.getElementById('placesJson').value.trim();
+        const customJson = document.getElementById('customJson').value.trim();
 
-            finalSvg = ''; // Очищаем финальный SVG
-            invalidNames = []; // Очищаем массив с неправильными именами
+        finalSvg = ''; // Очищаем финальный SVG
+        invalidNames = []; // Очищаем массив с неправильными именами
 
-            // Проверяем, заполнены ли оба поля
-            if (placesJson && customJson) {
-                // Обрабатываем места
-                try {
-                    const data = JSON.parse(placesJson);
-                    const result = JSON.parse(data.result); // Разбираем вложенный JSON
-                    const levels = result.levels;
+        if (placesJson && customJson) {
+            try {
+                const data = JSON.parse(placesJson);
+                const result = JSON.parse(data.result);
+                const levels = result.levels;
 
-                    let svgContent = '';
+                let svgContent = '';
 
-                    // Создаём SVG элементы для каждого уровня
-                    levels.forEach(level => {
-                        const outlineColor = level.color || 'black';
-                        const outline = level.outline;
+                levels.forEach(level => {
+                    const outlineColor = level.color || 'black';
+                    const outline = level.outline;
 
-                        // Проверка имени уровня на спецсимволы
-                        if (/[^\w\s]/.test(level.name)) {
-                            invalidNames.push(level.name); // Добавляем в список
-                        }
-
-                        svgContent += `<path d="${outline}" fill="none" stroke="${outlineColor}" stroke-width="2" id="${level.name}_outline"></path>`;
-
-                        level.seats.forEach(seat => {
-                            const seatColor = "#666666";
-                            const seatId = `${level.name}_${seat.row}_${seat.place}`;
-                            svgContent += `<circle cx="${seat.x_coord}" cy="${seat.y_coord}" r="5" fill="${seatColor}" id="${seatId}"></circle>`;
-                        });
-                    });
-
-                    finalSvg += svgContent;  // Добавляем к итоговому SVG
-                } catch (error) {
-                    alert("Ошибка при парсинге JSON с местами: " + error.message);
-                }
-
-                // Если есть данные для подложки, добавляем их
-                if (customJson) {
-                    try {
-                        const jsonObject = JSON.parse(customJson); // Парсим JSON из поля
-                        const customSvgString = jsonObject.result; // Извлекаем строку с SVG-кодом
-                        
-                        // Пробуем вставить SVG
-                        const parser = new DOMParser();
-                        const customSvgElement = parser.parseFromString(customSvgString, "application/xml").documentElement;
-
-                        // Добавляем данные с подложкой в итоговый SVG
-                        finalSvg += customSvgElement.outerHTML;
-                    } catch (error) {
-                        alert("Ошибка при парсинге JSON с SVG: " + error.message);
+                    if (/[^\w\s]/.test(level.name)) {
+                        invalidNames.push(level.name);
                     }
-                }
 
-                // Добавляем шапку и футер для SVG
-                const svgHeader = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100%" height="auto">`;
-                const svgFooter = `</svg>`;
+                    svgContent += `<path d="${outline}" fill="none" stroke="${outlineColor}" stroke-width="2" id="${level.name}_outline"></path>`;
 
-                const completeSvg = svgHeader + finalSvg + svgFooter;
+                    level.seats.forEach(seat => {
+                        const seatColor = "#666666";
+                        const seatId = `${level.name}_${seat.row}_${seat.place}`;
+                        svgContent += `<circle cx="${seat.x_coord}" cy="${seat.y_coord}" r="5" fill="${seatColor}" id="${seatId}" class="seat" data-tooltip="${level.name}_${seat.row}_${seat.place}"></circle>`;
+                    });
+                });
 
-                // Выводим итоговый SVG на экран
-                svgCanvas.innerHTML = finalSvg;
+                finalSvg += svgContent;
+            } catch (error) {
+                alert("Ошибка при парсинге JSON с местами: " + error.message);
+            }
 
-                // Генерация итогового SVG для скачивания
-                const downloadLink = document.getElementById('downloadLink');
-                const blob = new Blob([completeSvg], { type: 'image/svg+xml' });
-                const url = URL.createObjectURL(blob);
-                downloadLink.href = url;
-                downloadLink.style.display = 'inline'; // Показываем ссылку для скачивания
+            if (customJson) {
+                try {
+                    const jsonObject = JSON.parse(customJson);
+                    const customSvgString = jsonObject.result;
 
-                // Если есть недопустимые имена, показываем их в pop-up
-                if (invalidNames.length > 0) {
-                    displayPopup(invalidNames);
+                    const parser = new DOMParser();
+                    const customSvgElement = parser.parseFromString(customSvgString, "application/xml").documentElement;
+
+                    finalSvg = customSvgElement.outerHTML + finalSvg;
+                } catch (error) {
+                    alert("Ошибка при парсинге JSON с SVG: " + error.message);
                 }
             }
+
+            const svgHeader = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100%" height="auto">`;
+            const svgFooter = `</svg>`;
+            const completeSvg = svgHeader + finalSvg + svgFooter;
+
+            svgCanvas.innerHTML = finalSvg;
+
+            const blob = new Blob([completeSvg], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+            downloadLink.href = url;
+            downloadLink.style.display = 'inline';
         }
+    }
 
-        function displayPopup(invalidNames) {
-            const popupOverlay = document.getElementById('popupOverlay');
-            const popupList = document.getElementById('popupList');
-            popupList.innerHTML = '';  // Очищаем список
+    // Масштабирование
+    zoomInButton.addEventListener('click', () => {
+        scale *= 1.2;
+        svgCanvas.style.transform = `scale(${scale})`;
+    });
 
-            // Добавляем каждое недопустимое имя в список
-            invalidNames.forEach(name => {
-                const listItem = document.createElement('li');
-                listItem.textContent = name;
-                popupList.appendChild(listItem);
+    zoomOutButton.addEventListener('click', () => {
+        scale /= 1.2;
+        svgCanvas.style.transform = `scale(${scale})`;
+    });
+
+    resetZoomButton.addEventListener('click', () => {
+        scale = 1;
+        svgCanvas.style.transform = `scale(${scale})`;
+    });
+
+    svgContainer.addEventListener('wheel', (event) => {
+        if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            scale *= (event.deltaY < 0) ? 1.1 : 0.9; // Увеличиваем или уменьшаем в зависимости от направления колеса
+            svgCanvas.style.transform = `scale(${scale})`;
+        }
+    });
+
+    // Перетаскивание SVG
+    let isDragging = false;
+    let offsetX, offsetY;
+
+    svgContainer.addEventListener('mousedown', (event) => {
+        if (event.button === 0) { // Проверяем, что нажата левая кнопка мыши
+            isDragging = true;
+            offsetX = event.clientX - svgContainer.getBoundingClientRect().left;
+            offsetY = event.clientY - svgContainer.getBoundingClientRect().top;
+            svgContainer.style.cursor = 'grabbing'; // Меняем курсор при захвате
+        }
+    });
+
+    svgContainer.addEventListener('mousemove', (event) => {
+        if (isDragging) {
+            const mouseX = event.clientX;
+            const mouseY = event.clientY;
+            const newLeft = mouseX - offsetX;
+            const newTop = mouseY - offsetY;
+
+            svgContainer.style.transform = `translate(${newLeft}px, ${newTop}px)`;
+        }
+    });
+
+    svgContainer.addEventListener('mouseup', () => {
+        isDragging = false;
+        svgContainer.style.cursor = 'grab'; // Восстанавливаем курсор захвата
+    });
+
+    svgContainer.addEventListener('mouseleave', () => {
+        isDragging = false;
+        svgContainer.style.cursor = 'grab'; // Восстанавливаем курсор, если мышь покинула контейнер
+    });
+
+    // Управление слоями (показать/скрыть)
+    toggleLayerCheckbox.addEventListener('change', () => {
+        const paths = svgCanvas.querySelectorAll('path');
+        paths.forEach(path => {
+            path.style.display = toggleLayerCheckbox.checked ? 'block' : 'none';
+        });
+    });
+
+    // Всплывающая подсказка при наведении на место
+    svgCanvas.addEventListener('mouseover', event => {
+        const target = event.target;
+        if (target.classList.contains('seat')) {
+            tooltip.style.display = 'block';
+            tooltip.textContent = target.dataset.tooltip;
+        }
+    });
+
+    svgCanvas.addEventListener('mousemove', event => {
+        tooltip.style.left = `${event.pageX + 30}px`; // Добавляем смещение на 30px от курсора
+        tooltip.style.top = `${event.pageY + 10}px`;
+    });
+
+    svgCanvas.addEventListener('mouseout', event => {
+        if (event.target.classList.contains('seat')) {
+            tooltip.style.display = 'none';
+        }
+    });
+
+    // Удаление места по клику
+    svgCanvas.addEventListener('click', event => {
+        const target = event.target;
+        if (target.classList.contains('seat')) {
+            popupText.textContent = `Удалить место: ${target.dataset.tooltip}?`;
+            popup.style.display = 'block';
+
+            const confirmDeletion = () => {
+                const seatToRemove = document.querySelector(`[data-tooltip="${popupText.textContent.replace('Удалить место: ', '').replace('?', '')}"]`);
+                if (seatToRemove) {
+                    seatToRemove.remove();
+                    popup.style.display = 'none';
+                }
+            };
+
+            popupClose.addEventListener('click', () => {
+                popup.style.display = 'none';
             });
 
-            popupOverlay.style.display = 'flex'; // Показываем поп-ап
+            popup.addEventListener('click', confirmDeletion);
         }
+    });
 
-        function closePopup() {
-            const popupOverlay = document.getElementById('popupOverlay');
-            popupOverlay.style.display = 'none'; // Закрываем поп-ап
-        }
-    </script>
+</script>
+
+
+
 </body>
 </html>
