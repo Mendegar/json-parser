@@ -183,6 +183,73 @@
                 width: 100%;
             }
         }
+
+        /* Стили для pop-up с черепушкой */
+.popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.popup-content {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+    width: 400px;
+    max-width: 90%;
+    animation: fadeIn 0.3s ease-in-out;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+}
+
+.popup-content h2 {
+    color: #e74c3c;
+    margin-bottom: 10px;
+}
+
+.popup-content p {
+    margin-bottom: 15px;
+}
+
+.popup-content img {
+    width: 80px;
+    margin-bottom: 10px;
+}
+
+.popup-content ul {
+    text-align: left;
+    margin-top: 10px;
+}
+
+.popup-content ul li {
+    color: #e74c3c;
+    margin-bottom: 5px;
+}
+
+.close-btn {
+    padding: 10px 15px;
+    background-color: #e74c3c;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.close-btn:hover {
+    background-color: #c0392b;
+}
+
+@keyframes fadeIn {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+}
     </style>
 </head>
 <body>
@@ -225,6 +292,16 @@
             <button id="popupDelete">Удалить</button> <!-- Добавлена кнопка для подтверждения удаления -->
         </div>
     </div>
+    <!-- Pop-up с черепушкой для недопустимых имен -->
+<div id="invalidNamesPopup" class="popup-overlay">
+    <div class="popup-content">
+        <img src="https://img.icons8.com/ios/452/skull.png" alt="Skull Icon" />
+        <h2>Недопустимые имена!</h2>
+        <p>Найдены названия с недопустимыми символами:</p>
+        <ul id="invalidNamesList"></ul>
+        <button class="close-btn" onclick="closeInvalidNamesPopup()">Закрыть</button>
+    </div>
+</div>
 
    <script>
     let finalSvg = ''; // Эта переменная будет хранить итоговое содержимое SVG
@@ -419,6 +496,102 @@
             popup.addEventListener('click', confirmDeletion);
         }
     });
+
+       // Функция для отображения pop-up с недопустимыми именами
+function displayInvalidNamesPopup(invalidNames) {
+    const popup = document.getElementById('invalidNamesPopup');
+    const invalidNamesList = document.getElementById('invalidNamesList');
+
+    // Очищаем список перед добавлением новых элементов
+    invalidNamesList.innerHTML = '';
+
+    // Добавляем каждое недопустимое имя в список
+    invalidNames.forEach(name => {
+        const listItem = document.createElement('li');
+        listItem.textContent = name;
+        invalidNamesList.appendChild(listItem);
+    });
+
+    // Показываем pop-up
+    popup.style.display = 'flex';
+}
+
+// Функция для закрытия pop-up
+function closeInvalidNamesPopup() {
+    const popup = document.getElementById('invalidNamesPopup');
+    popup.style.display = 'none';
+}
+
+// В функции combineSVG добавьте вызов pop-up, если найдены недопустимые имена
+function combineSVG() {
+    const placesJson = document.getElementById('placesJson').value.trim();
+    const customJson = document.getElementById('customJson').value.trim();
+
+    finalSvg = ''; // Очищаем финальный SVG
+    invalidNames = []; // Очищаем массив с неправильными именами
+
+    if (placesJson && customJson) {
+        try {
+            const data = JSON.parse(placesJson);
+            const result = JSON.parse(data.result);
+            const levels = result.levels;
+
+            let svgContent = '';
+
+            levels.forEach(level => {
+                const outlineColor = level.color || 'black';
+                const outline = level.outline;
+
+                // Проверка имени уровня на спецсимволы
+                if (/[^\w\s]/.test(level.name)) {
+                    invalidNames.push(level.name);
+                }
+
+                svgContent += `<path d="${outline}" fill="none" stroke="${outlineColor}" stroke-width="2" id="${level.name}_outline"></path>`;
+
+                level.seats.forEach(seat => {
+                    const seatColor = "#666666";
+                    const seatId = `${level.name}_${seat.row}_${seat.place}`;
+                    svgContent += `<circle cx="${seat.x_coord}" cy="${seat.y_coord}" r="5" fill="${seatColor}" id="${seatId}" class="seat" data-tooltip="${level.name}_${seat.row}_${seat.place}"></circle>`;
+                });
+            });
+
+            finalSvg += svgContent;
+        } catch (error) {
+            alert("Ошибка при парсинге JSON с местами: " + error.message);
+        }
+
+        if (customJson) {
+            try {
+                const jsonObject = JSON.parse(customJson);
+                const customSvgString = jsonObject.result;
+
+                const parser = new DOMParser();
+                const customSvgElement = parser.parseFromString(customSvgString, "application/xml").documentElement;
+
+                finalSvg = customSvgElement.outerHTML + finalSvg;
+            } catch (error) {
+                alert("Ошибка при парсинге JSON с SVG: " + error.message);
+            }
+        }
+
+        const svgHeader = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100%" height="auto">`;
+        const svgFooter = `</svg>`;
+        const completeSvg = svgHeader + finalSvg + svgFooter;
+
+        svgCanvas.innerHTML = finalSvg;
+
+        const blob = new Blob([completeSvg], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+        downloadLink.href = url;
+        downloadLink.style.display = 'inline';
+
+        // Если есть недопустимые имена, показываем pop-up
+        if (invalidNames.length > 0) {
+            displayInvalidNamesPopup(invalidNames);
+        }
+    }
+}
 
 </script>
 
